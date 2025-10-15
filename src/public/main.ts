@@ -3,40 +3,29 @@ interface Uint8Array {
 	pointer: number;
 }
 
-const buffer: ArrayBuffer = new ArrayBuffer(16);
-const bufferView: Uint8Array = new Uint8Array(buffer);
-
-for (let i = 0; i < bufferView.length; i++) {
-	bufferView[i] = i*2;
-	console.log(bufferView[i]);
-}
-
 Uint8Array.prototype.read = function (length: number = 1): Uint8Array {
 	if (this.pointer === undefined || this.pointer === null) { this.pointer = 0 }
 	if ((this.pointer + length) > this.length) { 
 		throw new RangeError(`Attempted to read from ${this.pointer} to ${this.pointer + length}, but the buffer is of length ${this.length}`) 
 	}
 
-	let returnBuffer: Uint8Array = this.slice(this.pointer, this.pointer + length);
-	this.pointer++;
+	let totalRead: number = this.pointer + length;
+	let returnBuffer: Uint8Array = this.slice(this.pointer, totalRead);
+	this.pointer = totalRead;
 	return returnBuffer;
 };
 
-console.log(bufferView.read(1))
-console.log(bufferView.read(1))
-console.log(bufferView.read(1))
-console.log(bufferView.read(1))
-
-
 class ASN1BERTag {
 	tagValue: Uint8Array;
+	constructed: boolean;
 
 	constructor(buffer: Uint8Array) {
 		this.tagValue = this.retrieveTag(buffer);
+		this.constructed = this.isConstructed();
 	}
 
 	retrieveTag(buffer: Uint8Array): Uint8Array {
-		let firstOctet: number = buffer.read(1)[0]!;
+		let firstOctet: number = buffer.read(1)[0]!
 		if ((firstOctet & 0x1F) === 0x1F) {
 			console.log("Processing high-form tag");
 			let octets = [firstOctet];
@@ -50,6 +39,10 @@ class ASN1BERTag {
 			console.log("Processing low-form tag");
 			return Uint8Array.from([firstOctet]);
 		}
+	}
+
+	isConstructed() {
+		return (this.tagValue[0]! & 0x20) === 0x20;
 	}
 }
 
@@ -100,14 +93,33 @@ class ASN1BER {
 	tag: ASN1BERTag;
 	length: ASN1BERLength;
 	value: ASN1BERValue;
+	children: ASN1BER[] = [];
 
 	constructor(buffer: Uint8Array) {
 		this.tag = new ASN1BERTag(buffer);
 		this.length = new ASN1BERLength(buffer);
 		this.value = new ASN1BERValue(buffer, this.length.lengthValue);
+		console.log(`Final pointer: ${buffer.pointer}`);
+		//@ts-ignore
+		console.log(`Tag: ${this.tag.tagValue.toHex()}`);
+		//@ts-ignore
+		console.log(`Length: ${this.length.lengthBytes.toHex()}`);
+		//@ts-ignore
+		console.log(`Value: ${this.value.content.toHex()}`);
+		if (this.tag.constructed) {
+			console.log("Processing constructed");
+			let contentEnd: number = buffer.pointer;
+			buffer.pointer = buffer.pointer - this.length.lengthValue; // Reset pointer to beginning of value
+			while (buffer.pointer < contentEnd) {
+				this.children = this.children.concat(new ASN1BER(buffer));
+				console.log("Added child");
+				console.log(this.children);
+			}
+		}
 	}
 }
 
 //@ts-ignore
 let example: ASN1BER = new ASN1BER(Uint8Array.fromHex("30230201010481086669726577616c6ca1130201000201000201003008300606022a030500"));
 console.log(example.tag, example.length, example.value);
+console.log(example.tag.constructed)
