@@ -15,6 +15,10 @@ Uint8Array.prototype.read = function (length: number = 1): Uint8Array {
 	return returnBuffer;
 };
 
+function findEndOfContentBytes(element: number, index: number, array: Uint8Array): boolean {
+	return (element === 0x00) && (array[index+1] === 0x00)
+}
+
 class ASN1BERTag {
 	tagValue: Uint8Array;
 	constructed: boolean;
@@ -50,15 +54,20 @@ class ASN1BERLength {
 	lengthValue: number;
 	lengthBytes: Uint8Array;
 
-	constructor(buffer: Uint8Array) {
-		let lengthInfo: [number, Uint8Array] = this.retrieveLength(buffer);
+	constructor(buffer: Uint8Array, isConstructed: boolean) {
+		let lengthInfo: [number, Uint8Array] = this.retrieveLength(buffer, isConstructed);
 		this.lengthValue = lengthInfo[0];
 		this.lengthBytes = lengthInfo[1];
 	}
 
-	retrieveLength(buffer: Uint8Array): [number, Uint8Array] {
+	retrieveLength(buffer: Uint8Array, isConstructed: boolean): [number, Uint8Array] {
 		let firstOctet: number = buffer.read(1)[0]!;
-		if ((firstOctet & 0x80)) {
+		if ((firstOctet === 0x80) && isConstructed) {
+			console.log("Processing indefinite length");
+			// We search the rest of the buffer for 0x00,0x00 (end of content)
+			let contentSearchBuffer: Uint8Array = buffer.slice(buffer.pointer, buffer.length);
+			return [contentSearchBuffer.findIndex(findEndOfContentBytes), Uint8Array.from([firstOctet])];
+		} else if ((firstOctet & 0x80)) {
 			console.log("Processing long-form length");
 			let octets = [firstOctet];
 			let lengthLength: number = firstOctet ^ 0x80;
@@ -97,7 +106,7 @@ class ASN1BER {
 
 	constructor(buffer: Uint8Array) {
 		this.tag = new ASN1BERTag(buffer);
-		this.length = new ASN1BERLength(buffer);
+		this.length = new ASN1BERLength(buffer, this.tag.constructed);
 		this.value = new ASN1BERValue(buffer, this.length.lengthValue);
 		console.log(`Final pointer: ${buffer.pointer}`);
 		//@ts-ignore
@@ -107,7 +116,7 @@ class ASN1BER {
 		//@ts-ignore
 		console.log(`Value: ${this.value.content.toHex()}`);
 		if (this.tag.constructed) {
-			console.log("Processing constructed");
+			console.log("Processing constructed - definite-length");
 			let contentEnd: number = buffer.pointer;
 			buffer.pointer = buffer.pointer - this.length.lengthValue; // Reset pointer to beginning of value
 			while (buffer.pointer < contentEnd) {
