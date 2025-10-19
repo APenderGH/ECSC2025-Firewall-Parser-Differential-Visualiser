@@ -1,1 +1,12 @@
 @import "tailwindcss";
+@source "../../build/public/index.html";
+
+@theme {
+	--font-jetbrains: "JetBrains Mono";
+	--color-primarygreen: #B8BB26;
+	--color-plaintext: #D3C4A1;
+	--color-background-one: #1D2021;
+	--color-background-two: #191B1C;
+	--color-grey-border: #665C54;
+	--color-red: #fb4934;
+}
