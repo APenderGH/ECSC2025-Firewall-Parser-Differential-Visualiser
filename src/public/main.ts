@@ -1,3 +1,4 @@
+// PARSERS //
 interface Uint8Array {
 	read(length: number): Uint8Array;
 	pointer: number;
@@ -132,3 +133,30 @@ class ASN1BER {
 let example: ASN1BER = new ASN1BER(Uint8Array.fromHex("30230201010481086669726577616c6ca1130201000201000201003008300606022a030500"));
 console.log(example.tag, example.length, example.value);
 console.log(example.tag.constructed)
+
+// RENDERING //
+
+let createTagHTML: () => HTMLDivElement = () => { 
+	let html: HTMLDivElement = document.createElement("div");
+	html.classList.add("text-(--color-orange)");
+	return html;
+};
+
+let createLengthHTML: () => HTMLDivElement = () => {
+	let html: HTMLDivElement = document.createElement("div");
+	html.classList.add("text-(--color-blue)");
+	return html;
+}
+
+let createValueHTML: () => HTMLDivElement = () => {
+	let html: HTMLDivElement = document.createElement("div");
+	return html;
+}
+
+function updateStandardASN1Visualiser(byteString: string) {
+	let asn1: ASN1BER = new ASN1BER(Uint8Array.fromHex(byteString));
+	let byteBox: HTMLDivElement = document.getElementById("StandardParser")! as HTMLDivElement;
+	asn1.forEach((TLV) => {
+		
+	});
+}
