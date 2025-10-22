@@ -136,27 +136,67 @@ console.log(example.tag.constructed)
 
 // RENDERING //
 
-let createTagHTML: () => HTMLDivElement = () => { 
-	let html: HTMLDivElement = document.createElement("div");
-	html.classList.add("text-(--color-orange)");
-	return html;
-};
-
-let createLengthHTML: () => HTMLDivElement = () => {
-	let html: HTMLDivElement = document.createElement("div");
-	html.classList.add("text-(--color-blue)");
-	return html;
+let createByteHTML: (bytes: Uint8Array) => HTMLDivElement[] = (bytes: Uint8Array) => {
+	let bytesHTML: HTMLDivElement[] = [];
+	bytes.forEach((byte) => {
+		let byteHTML: HTMLDivElement = document.createElement("div");
+		byteHTML.textContent = byte.toString(16).padStart(2,"0");
+		bytesHTML = bytesHTML.concat(byteHTML);
+	});
+	return bytesHTML;
 }
 
-let createValueHTML: () => HTMLDivElement = () => {
-	let html: HTMLDivElement = document.createElement("div");
-	return html;
+let createTagHTML: (byteHTML: HTMLDivElement[]) => HTMLDivElement[] = (byteHTML: HTMLDivElement[]) => { 
+	let tagHTML: HTMLDivElement[] = [];
+	byteHTML.forEach((byte) => {
+		byte.classList.add("text-(--color-orange)");
+		tagHTML = tagHTML.concat(byte);
+	});
+	return tagHTML;
+};
+
+let createLengthHTML: (byteHTML: HTMLDivElement[]) => HTMLDivElement[] = (byteHTML: HTMLDivElement[]) => { 
+	let lengthHTML: HTMLDivElement[] = [];
+	byteHTML.forEach((byte) => {
+		byte.classList.add("text-(--color-blue)");
+		lengthHTML = lengthHTML.concat(byte);
+	});
+	return lengthHTML;
+}
+
+let createValueHTML: (byteHTML: HTMLDivElement[]) => HTMLDivElement[] = (byteHTML: HTMLDivElement[]) => { 
+	let valueHTML: HTMLDivElement[] = [];
+	byteHTML.forEach((byte) => {
+		// We don't have any value specific styling atm.
+		valueHTML = valueHTML.concat(byte);
+	});
+	return valueHTML;
+}
+
+function createASN1ByteHTML(asn1: ASN1BER) {
+	let tagHTML: HTMLDivElement[] = createTagHTML(createByteHTML(asn1.tag.tagValue));
+	let lengthHTML: HTMLDivElement[] = createLengthHTML(createByteHTML(asn1.length.lengthBytes));
+	let valueHTML: HTMLDivElement[] = [];
+	if (asn1.children.length != 0)  {
+		asn1.children.forEach((child) => {
+			valueHTML = valueHTML.concat(createASN1ByteHTML(child));
+		});
+	} else {
+		valueHTML = createValueHTML(createByteHTML(asn1.value.content));
+	}
+	return ([] as HTMLDivElement[]).concat(tagHTML, lengthHTML, valueHTML);
 }
 
 function updateStandardASN1Visualiser(byteString: string) {
+	//@ts-ignore
 	let asn1: ASN1BER = new ASN1BER(Uint8Array.fromHex(byteString));
 	let byteBox: HTMLDivElement = document.getElementById("StandardParser")! as HTMLDivElement;
-	asn1.forEach((TLV) => {
-		
+	let asn1HTML: HTMLDivElement[] = createASN1ByteHTML(asn1);
+	asn1HTML.forEach((div) => {
+		byteBox.appendChild(div);
 	});
+}
+
+function updateVisualisers(byteString: string) {
+	updateStandardASN1Visualiser(byteString);
 }
