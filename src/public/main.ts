@@ -207,8 +207,8 @@ function createASN1ByteHTML(asn1: ASN1BER, groupIdentifier: number = 1) {
 	let valueHTML: HTMLDivElement[] = [];
 
 	if (asn1.children.length != 0)  {
-		asn1.children.forEach((child) => {
-			valueHTML = valueHTML.concat(createASN1ByteHTML(child, groupIdentifier+1));
+		asn1.children.forEach((child, index) => {
+			valueHTML = valueHTML.concat(createASN1ByteHTML(child, groupIdentifier+index+1));
 		});
 	} else {
 		valueHTML = createValueHTML(createByteHTML(asn1.value.content));
