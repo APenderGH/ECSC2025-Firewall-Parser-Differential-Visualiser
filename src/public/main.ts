@@ -140,6 +140,7 @@ let createByteHTML: (bytes: Uint8Array) => HTMLDivElement[] = (bytes: Uint8Array
 	let bytesHTML: HTMLDivElement[] = [];
 	bytes.forEach((byte) => {
 		let byteHTML: HTMLDivElement = document.createElement("div");
+		byteHTML.classList.add("px-1");
 		byteHTML.textContent = byte.toString(16).padStart(2,"0");
 		bytesHTML = bytesHTML.concat(byteHTML);
 	});
@@ -173,18 +174,55 @@ let createValueHTML: (byteHTML: HTMLDivElement[]) => HTMLDivElement[] = (byteHTM
 	return valueHTML;
 }
 
-function createASN1ByteHTML(asn1: ASN1BER) {
+function highlightByteGroup(byte: HTMLDivElement) {
+	let classList: DOMTokenList = byte.classList;
+	let highestByteGroup: number = 1;
+	classList.forEach((className) => {
+		let byteGroupString: string | undefined = className.split("bytegroup-")[1];
+		if (byteGroupString === undefined) { return; }
+
+		let byteGroup: number = parseInt(byteGroupString);
+		if (byteGroup > highestByteGroup) {
+			highestByteGroup = byteGroup;
+		}
+	});
+
+	let bytesToHighlight: HTMLCollection = document.getElementsByClassName(`bytegroup-${highestByteGroup}`);
+	for (let i = 0; i < bytesToHighlight.length; i++) {
+		bytesToHighlight[i]!.classList.add("bg-(--color-highlight)");
+	}
+}
+
+function unhighlightBytes(parserDiv: HTMLDivElement) {
+	let bytes: HTMLCollection = parserDiv.children;
+	for (let i = 0; i < bytes.length; i++) {
+		bytes[i]!.classList.remove("bg-(--color-highlight)");
+	}
+}
+
+
+function createASN1ByteHTML(asn1: ASN1BER, groupIdentifier: number = 1) {
 	let tagHTML: HTMLDivElement[] = createTagHTML(createByteHTML(asn1.tag.tagValue));
 	let lengthHTML: HTMLDivElement[] = createLengthHTML(createByteHTML(asn1.length.lengthBytes));
 	let valueHTML: HTMLDivElement[] = [];
+
 	if (asn1.children.length != 0)  {
 		asn1.children.forEach((child) => {
-			valueHTML = valueHTML.concat(createASN1ByteHTML(child));
+			valueHTML = valueHTML.concat(createASN1ByteHTML(child, groupIdentifier+1));
 		});
 	} else {
 		valueHTML = createValueHTML(createByteHTML(asn1.value.content));
 	}
-	return ([] as HTMLDivElement[]).concat(tagHTML, lengthHTML, valueHTML);
+
+	let ASN1ByteHTML: HTMLDivElement[] = ([] as HTMLDivElement[]).concat(tagHTML, lengthHTML, valueHTML);
+	ASN1ByteHTML.forEach((element) => {
+		element.classList.add(`bytegroup-${groupIdentifier}`);
+		element.setAttribute("onmouseover", "highlightByteGroup(this)");
+		//element.classList.add("hover:bg-(--color-highlight)");
+		//element.classList.add("hover:border-1");
+		//element.classList.add("hover:border-(--color-background-one)");
+	});
+	return ASN1ByteHTML;
 }
 
 function updateStandardASN1Visualiser(byteString: string) {

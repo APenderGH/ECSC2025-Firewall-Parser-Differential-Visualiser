@@ -7,6 +7,7 @@
 	--color-plaintext: #D3C4A1;
 	--color-background-one: #1D2021;
 	--color-background-two: #191B1C;
+	--color-highlight: oklch(0.8591 0 126.59 / 15.94%);
 	--color-grey-border: #665C54;
 	--color-red: #fb4934;
 	--color-orange: #FE8019;
