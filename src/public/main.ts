@@ -24,14 +24,14 @@ class ASN1BERTag {
 	tagValue: Uint8Array;
 	constructed: boolean;
 
-	constructor(buffer: Uint8Array) {
-		this.tagValue = this.retrieveTag(buffer);
+	constructor(buffer: Uint8Array, isFirewallParser: boolean = false) {
+		this.tagValue = this.retrieveTag(buffer, isFirewallParser);
 		this.constructed = this.isConstructed();
 	}
 
-	retrieveTag(buffer: Uint8Array): Uint8Array {
+	retrieveTag(buffer: Uint8Array, isFirewallParser: boolean): Uint8Array {
 		let firstOctet: number = buffer.read(1)[0]!
-		if ((firstOctet & 0x1F) === 0x1F) {
+		if (((firstOctet & 0x1F) === 0x1F) && !isFirewallParser) {
 			console.log("Processing high-form tag");
 			let octets = [firstOctet];
 			while (true) {
@@ -55,20 +55,20 @@ class ASN1BERLength {
 	lengthValue: number;
 	lengthBytes: Uint8Array;
 
-	constructor(buffer: Uint8Array, isConstructed: boolean) {
-		let lengthInfo: [number, Uint8Array] = this.retrieveLength(buffer, isConstructed);
+	constructor(buffer: Uint8Array, isConstructed: boolean, isFirewallParser: boolean = false) {
+		let lengthInfo: [number, Uint8Array] = this.retrieveLength(buffer, isConstructed, isFirewallParser);
 		this.lengthValue = lengthInfo[0];
 		this.lengthBytes = lengthInfo[1];
 	}
 
-	retrieveLength(buffer: Uint8Array, isConstructed: boolean): [number, Uint8Array] {
+	retrieveLength(buffer: Uint8Array, isConstructed: boolean, isFirewallParser: boolean): [number, Uint8Array] {
 		let firstOctet: number = buffer.read(1)[0]!;
-		if ((firstOctet === 0x80) && isConstructed) {
+		if ((firstOctet === 0x80) && isConstructed && !isFirewallParser) {
 			console.log("Processing indefinite length");
 			// We search the rest of the buffer for 0x00,0x00 (end of content)
 			let contentSearchBuffer: Uint8Array = buffer.slice(buffer.pointer, buffer.length);
 			return [contentSearchBuffer.findIndex(findEndOfContentBytes), Uint8Array.from([firstOctet])];
-		} else if ((firstOctet & 0x80)) {
+		} else if ((firstOctet & 0x80) && !isFirewallParser) {
 			console.log("Processing long-form length");
 			let octets = [firstOctet];
 			let lengthLength: number = firstOctet ^ 0x80;
@@ -105,9 +105,9 @@ class ASN1BER {
 	value: ASN1BERValue;
 	children: ASN1BER[] = [];
 
-	constructor(buffer: Uint8Array) {
-		this.tag = new ASN1BERTag(buffer);
-		this.length = new ASN1BERLength(buffer, this.tag.constructed);
+	constructor(buffer: Uint8Array, isFirewallParser: boolean = false) {
+		this.tag = new ASN1BERTag(buffer, isFirewallParser);
+		this.length = new ASN1BERLength(buffer, this.tag.constructed, isFirewallParser);
 		this.value = new ASN1BERValue(buffer, this.length.lengthValue);
 		console.log(`Final pointer: ${buffer.pointer}`);
 		//@ts-ignore
@@ -121,7 +121,7 @@ class ASN1BER {
 			let contentEnd: number = buffer.pointer;
 			buffer.pointer = buffer.pointer - this.length.lengthValue; // Reset pointer to beginning of value
 			while (buffer.pointer < contentEnd) {
-				this.children = this.children.concat(new ASN1BER(buffer));
+				this.children = this.children.concat(new ASN1BER(buffer, isFirewallParser));
 				console.log("Added child");
 				console.log(this.children);
 			}
@@ -129,12 +129,9 @@ class ASN1BER {
 	}
 }
 
-//@ts-ignore
-let example: ASN1BER = new ASN1BER(Uint8Array.fromHex("30230201010481086669726577616c6ca1130201000201000201003008300606022a030500"));
-console.log(example.tag, example.length, example.value);
-console.log(example.tag.constructed)
-
 // RENDERING //
+
+let GROUP_IDENTIFIER_COUNT = 1;
 
 let createByteHTML: (bytes: Uint8Array) => HTMLDivElement[] = (bytes: Uint8Array) => {
 	let bytesHTML: HTMLDivElement[] = [];
@@ -200,27 +197,26 @@ function unhighlightBytes(parserDiv: HTMLDivElement) {
 	}
 }
 
-
-function createASN1ByteHTML(asn1: ASN1BER, groupIdentifier: number = 1) {
+function createASN1ByteHTML(asn1: ASN1BER) {
+	let groupIdentifier = GROUP_IDENTIFIER_COUNT;
 	let tagHTML: HTMLDivElement[] = createTagHTML(createByteHTML(asn1.tag.tagValue));
 	let lengthHTML: HTMLDivElement[] = createLengthHTML(createByteHTML(asn1.length.lengthBytes));
 	let valueHTML: HTMLDivElement[] = [];
 
 	if (asn1.children.length != 0)  {
 		asn1.children.forEach((child, index) => {
-			valueHTML = valueHTML.concat(createASN1ByteHTML(child, groupIdentifier+index+1));
+			GROUP_IDENTIFIER_COUNT = groupIdentifier + index + 1;
+			valueHTML = valueHTML.concat(createASN1ByteHTML(child));
 		});
 	} else {
 		valueHTML = createValueHTML(createByteHTML(asn1.value.content));
+		GROUP_IDENTIFIER_COUNT++;
 	}
 
 	let ASN1ByteHTML: HTMLDivElement[] = ([] as HTMLDivElement[]).concat(tagHTML, lengthHTML, valueHTML);
 	ASN1ByteHTML.forEach((element) => {
 		element.classList.add(`bytegroup-${groupIdentifier}`);
 		element.setAttribute("onmouseover", "highlightByteGroup(this)");
-		//element.classList.add("hover:bg-(--color-highlight)");
-		//element.classList.add("hover:border-1");
-		//element.classList.add("hover:border-(--color-background-one)");
 	});
 	return ASN1ByteHTML;
 }
@@ -230,6 +226,26 @@ function updateStandardASN1Visualiser(byteString: string) {
 	let asn1: ASN1BER = new ASN1BER(Uint8Array.fromHex(byteString));
 	let byteBox: HTMLDivElement = document.getElementById("StandardParser")! as HTMLDivElement;
 	let asn1HTML: HTMLDivElement[] = createASN1ByteHTML(asn1);
+
+	while (byteBox.lastChild) {
+		byteBox.removeChild(byteBox.lastChild);
+	}
+
+	asn1HTML.forEach((div) => {
+		byteBox.appendChild(div);
+	});
+}
+
+function updateFirewallASN1Visualiser(byteString: string) {
+	//@ts-ignore
+	let asn1: ASN1BER = new ASN1BER(Uint8Array.fromHex(byteString), true);
+	let byteBox: HTMLDivElement = document.getElementById("FirewallParser")! as HTMLDivElement;
+	let asn1HTML: HTMLDivElement[] = createASN1ByteHTML(asn1);
+
+	while (byteBox.lastChild) {
+		byteBox.removeChild(byteBox.lastChild);
+	}
+
 	asn1HTML.forEach((div) => {
 		byteBox.appendChild(div);
 	});
@@ -237,4 +253,5 @@ function updateStandardASN1Visualiser(byteString: string) {
 
 function updateVisualisers(byteString: string) {
 	updateStandardASN1Visualiser(byteString);
+	updateFirewallASN1Visualiser(byteString);
 }
