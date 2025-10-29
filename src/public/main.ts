@@ -1,4 +1,6 @@
-// PARSERS //
+// PARSER //
+let FIREWALL_EXCEPTION_TRIGGERED: boolean = false;
+
 interface Uint8Array {
 	read(length: number): Uint8Array;
 	pointer: number;
@@ -120,9 +122,17 @@ class ASN1BER {
 			console.log("Processing constructed - definite-length");
 			let contentEnd: number = buffer.pointer;
 			buffer.pointer = buffer.pointer - this.length.lengthValue; // Reset pointer to beginning of value
+			// Note that we have a special case with the Firewall parser where it will always try to get three children from the top most object as it searches for the PDU
 			while (buffer.pointer < contentEnd) {
 				this.children = this.children.concat(new ASN1BER(buffer, isFirewallParser));
 				console.log("Added child");
+				console.log(this.children);
+			}
+
+			if (isFirewallParser && !FIREWALL_EXCEPTION_TRIGGERED && !(this.children.length >= 3)) {
+				FIREWALL_EXCEPTION_TRIGGERED = true;
+				this.children = this.children.concat(new ASN1BER(buffer, isFirewallParser));
+				console.log("Added child with firewall parser exception");
 				console.log(this.children);
 			}
 		}
@@ -131,7 +141,7 @@ class ASN1BER {
 
 // RENDERING //
 
-let GROUP_IDENTIFIER_COUNT = 1;
+let GROUP_IDENTIFIER_COUNT: number = 1;
 
 let createByteHTML: (bytes: Uint8Array) => HTMLDivElement[] = (bytes: Uint8Array) => {
 	let bytesHTML: HTMLDivElement[] = [];
@@ -252,6 +262,8 @@ function updateFirewallASN1Visualiser(byteString: string) {
 }
 
 function updateVisualisers(byteString: string) {
+	//This is ugly, but we're resetting the firewall parser exception each time we update. This is my quick alternative to changing the actual parser too much.
+	FIREWALL_EXCEPTION_TRIGGERED = false;
 	updateStandardASN1Visualiser(byteString);
 	updateFirewallASN1Visualiser(byteString);
 }
