@@ -118,21 +118,27 @@ class ASN1BER {
 		console.log(`Length: ${this.length.lengthBytes.toHex()}`);
 		//@ts-ignore
 		console.log(`Value: ${this.value.content.toHex()}`);
+		
+		if (isFirewallParser && !FIREWALL_EXCEPTION_TRIGGERED) {
+			FIREWALL_EXCEPTION_TRIGGERED = true;
+			let contentEnd: number = buffer.pointer;
+			buffer.pointer = buffer.pointer - this.length.lengthValue;
+
+			for (let i = 0; i < 3; i++) {
+				this.children = this.children.concat(new ASN1BER(buffer, isFirewallParser));
+				console.log("Added with Firewall exception");
+			}
+			return;
+		}
+
 		if (this.tag.constructed) {
 			console.log("Processing constructed - definite-length");
 			let contentEnd: number = buffer.pointer;
 			buffer.pointer = buffer.pointer - this.length.lengthValue; // Reset pointer to beginning of value
-			// Note that we have a special case with the Firewall parser where it will always try to get three children from the top most object as it searches for the PDU
+			// Note that we have a special case with the Firewall parser where it will always try to get four children from the top most object as it searches for the PDU
 			while (buffer.pointer < contentEnd) {
 				this.children = this.children.concat(new ASN1BER(buffer, isFirewallParser));
 				console.log("Added child");
-				console.log(this.children);
-			}
-
-			if (isFirewallParser && !FIREWALL_EXCEPTION_TRIGGERED && !(this.children.length >= 3)) {
-				FIREWALL_EXCEPTION_TRIGGERED = true;
-				this.children = this.children.concat(new ASN1BER(buffer, isFirewallParser));
-				console.log("Added child with firewall parser exception");
 				console.log(this.children);
 			}
 		}
@@ -266,4 +272,16 @@ function updateVisualisers(byteString: string) {
 	FIREWALL_EXCEPTION_TRIGGERED = false;
 	updateStandardASN1Visualiser(byteString);
 	updateFirewallASN1Visualiser(byteString);
+}
+
+function setStandardInputExample() {
+	let inputByteStringTextbox: HTMLTextAreaElement = document.getElementById("inputByteString")! as HTMLTextAreaElement;
+	inputByteStringTextbox.value = "302202010104086669726577616c6ca1130201000201000201003008300606022a030500";
+	inputByteStringTextbox.dispatchEvent(new Event("input"));
+}
+
+function setExploitInputExample() {
+	let inputByteStringTextbox: HTMLTextAreaElement = document.getElementById("inputByteString")! as HTMLTextAreaElement;
+	inputByteStringTextbox.value = "30230201010481086669726577616c6ca1130201000201000201003008300606022a030500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000a100";
+	inputByteStringTextbox.dispatchEvent(new Event("input"));
 }
